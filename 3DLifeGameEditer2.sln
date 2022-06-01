@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29920.165
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "3DLifeGameEditer2", "3DLifeGameEditer2\3DLifeGameEditer2.vcxproj", "{D37ACD82-26D9-471D-AC27-B08CCB1E539F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D37ACD82-26D9-471D-AC27-B08CCB1E539F}.Debug|x64.ActiveCfg = Debug|x64
+		{D37ACD82-26D9-471D-AC27-B08CCB1E539F}.Debug|x64.Build.0 = Debug|x64
+		{D37ACD82-26D9-471D-AC27-B08CCB1E539F}.Release|x64.ActiveCfg = Release|x64
+		{D37ACD82-26D9-471D-AC27-B08CCB1E539F}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {A2AFDF00-8088-42C5-AF66-AC05FD5CCE11}
+	EndGlobalSection
+EndGlobal
