@@ -60,8 +60,10 @@ struct _Model {
 };
 
 AfinParameter3D viewingPiperine;
-const double CELL_PER = 10;
-const int SIDE_CELLS = 30;
+const double CELL_PER = 25;
+const int SIDE_CELLS = 20;
+const int CELL_SIZE = 6;
+const int MAX_HP = 200;
 // 共通
 _Vec3 changePos3D(_Vec3 p, AfinParameter3D afin) {
 	_Vec3 res;
@@ -177,7 +179,7 @@ Array<_Polygon3D> sortTriangle3D(Array<_Polygon3D> triangles) {//奥行ソート
 }
 // 投影変換
 Vec2 toVec2(_Vec3 pos) {
-	return Vec2{ pos.x,pos.y };
+	return Vec2{ pos.x*1.3,pos.y*1.3 };
 	//return Vec2{ pos.x/pos.z*200,pos.y/pos.z*200 };//投視投影　現時点だと歪んで見える
 }
 _Polygon renderTriangle(_Polygon3D t) {
@@ -301,15 +303,15 @@ Grid<int32> getField() {
 }
 bool isInField(_Vec3 p) {
 	bool check = true;
-	if (p.x<0 || p.x>=SIDE_CELLS)
+	if (p.x < 0 || p.x >= SIDE_CELLS)
 		check = false;
-	if (p.y<0 || p.y>=SIDE_CELLS)
+	if (p.y < 0 || p.y >= SIDE_CELLS)
 		check = false;
 	if (p.z < 0 || p.z >= SIDE_CELLS)
 		check = false;
 	return check;
 }
-double getCellScore(_Vec3 pos,Grid<int> field) {//指定したブロックの値を取得
+double getCellScore(_Vec3 pos, Grid<int> field) {//指定したブロックの値を取得
 	_Vec3 p = {};
 	double score = 0;
 	bool isAlive = false;
@@ -320,10 +322,10 @@ double getCellScore(_Vec3 pos,Grid<int> field) {//指定したブロックの値
 				if (isInField(p)) {
 					isAlive = field[int(p.x)][int(p.y)] >> int(p.z) & 1;
 					if (i * j * k == 0 && isAlive) {
-						score++;
+						score ++;
 					}
 					else if (isAlive) {
-						score += 0.5;
+						score +=0.5;
 					}
 				}
 			}
@@ -337,34 +339,58 @@ Grid<int32> getNextField(Grid<int32> current) {
 	for (int i = 0; i < SIDE_CELLS; i++) {
 		for (int j = 0; j < SIDE_CELLS; j++) {
 			for (int k = 0; k < SIDE_CELLS; k++) {
-				tmp = getCellScore(_Vec3{ double(i),double(j),double(k) },current);
-				if (tmp >= 3 && tmp <= 7) {
-					next[i][j] |= 1 << k;
+				tmp = getCellScore(_Vec3{ double(i),double(j),double(k) }, current);
+				if (tmp >= 3 && tmp <= 9) {
+					if (current[i][j] >> k & 1) {//生存
+						next[i][j] |= 1 << k;//1に書き換え
+					}
+					else if (tmp >= 4 && tmp <= 8) {//誕生
+						next[i][j] |= 1 << k;//1に書き換え
+					}
 				}
 			}
 		}
 	}
 	return next;
 }
-Array<_Model> fieldToModels(Grid<int32> field, Array<_Polygon3D> cubePolygons, Object core) {
-	_Vec3 pos;
-	Array<_Polygon3D> framePolygons = resizeModel(cubePolygons, 60);
+Array<_Model> fieldToModels(Grid<int32> field, Array<_Model> current ,Array<_Polygon3D> cubePolygons, Object core) {
+	Array<_Polygon3D> framePolygons = resizeModel(cubePolygons, SIDE_CELLS+1);
 	framePolygons = paintModel(framePolygons, { 0,255,0,45 });
-	Array<_Polygon3D> framePolygons2 = resizeModel(framePolygons, 0.1);
 	Array<_Model> models = {
 		{framePolygons,core,{0,0,0},100},
 	};
+	_Vec3 p = {};
+	for (int i = 0; i < current.size(); i++) {
+		p = current[i].zahyo;
+		if (field[int(p.x)][int(p.y)] >> int(p.z) & 1) {
+			field[int(p.x)][int(p.y)] ^= 1 << int(p.z);//1->0に書き換え
+			models << current[i];
+		}
+	}
 	for (int i = 0; i < SIDE_CELLS; i++) {
-		pos.x = 4 * (i - SIDE_CELLS / 2);
+		p.x = CELL_SIZE *2* (i - SIDE_CELLS / 2);
 		for (int j = 0; j < SIDE_CELLS; j++) {
-			pos.y = 4 * (j - SIDE_CELLS / 2);
+			p.y = CELL_SIZE *2* (j - SIDE_CELLS / 2);
 			for (int k = 0; k < SIDE_CELLS; k++) {
-				pos.z = 4 * (k - SIDE_CELLS / 2);
+				p.z = CELL_SIZE *2* (k - SIDE_CELLS / 2);
 				if (field[i][j] >> k & 1) {
-					models << _Model{ putModel(cubePolygons,pos), core, { double(i),double(j),double(k) }, 100 };
+					models << _Model{ putModel(cubePolygons,p), core, { double(i),double(j),double(k) }, MAX_HP };
 				}
 			}
 		}
+	}
+	return models;
+}
+Array<_Model> coloringModels(Array<_Model> models) {
+	Array<_Model> res = {
+		models[0]
+	};
+	for (int i=1; i < models.size(); i++) {//0は例外
+		models[i].hp--;
+		models[i].shape = paintModel(models[i].shape, HSV{ models[i].hp*3,0.6,1.0});
+		//if (models[i].hp) {
+			//res << models[i];
+		//}
 	}
 	return models;
 }
@@ -392,8 +418,8 @@ void Main()
 		{_Triangle3D{ samplePoints[4], samplePoints[2], samplePoints[3] },Color{100,100,100}},
 	};
 	Array<_Vec3> cubePoints = {
-	{-2,-2,-2},{2,-2,-2},{2,-2,2},{-2,-2,2},
-	{-2,2,-2},{2,2,-2},{2,2,2},{-2,2,2}
+	{-CELL_SIZE,-CELL_SIZE,-CELL_SIZE},{CELL_SIZE,-CELL_SIZE,-CELL_SIZE},{CELL_SIZE,-CELL_SIZE,CELL_SIZE},{-CELL_SIZE,-CELL_SIZE,CELL_SIZE},
+	{-CELL_SIZE,CELL_SIZE,-CELL_SIZE},{CELL_SIZE,CELL_SIZE,-CELL_SIZE},{CELL_SIZE,CELL_SIZE,CELL_SIZE},{-CELL_SIZE,CELL_SIZE,CELL_SIZE}
 	};
 	Array<_Polygon3D> cubePolygons = {
 	{_Triangle3D{ cubePoints[0], cubePoints[3], cubePoints[1] },Color{0,255,0}},
@@ -419,8 +445,9 @@ void Main()
 
 	Grid<int32> fieldState(SIDE_CELLS, SIDE_CELLS, 0);//３次元配列　z軸は2進数で管理
 	fieldState = getField();
-	Array<_Model> models = fieldToModels(fieldState, cubePolygons, core);
-
+	Array<_Model> models = {};
+	models = fieldToModels(fieldState,models, cubePolygons, core);
+	models = coloringModels(models);
 	//モデリング変換
 	Array<_Model> models_W = toWorld(models);
 	Object camera = { Angle{0,10},_Vec3{0,0,0} };
@@ -461,20 +488,19 @@ void Main()
 		if (SimpleGUI::Button(U"Reset", Vec2(600, 300), 200))
 		{
 			fieldState = getField();
-			models = fieldToModels(fieldState, cubePolygons, core);
+			models = fieldToModels(fieldState, models,cubePolygons, core);
 		}
-		if (count % 60 == 0) {
+		if (count % 20 == 0) {
 			fieldState = getNextField(fieldState);
-			models = fieldToModels(fieldState, cubePolygons, models[0].object);
-			Print << count / 60;
+			models = fieldToModels(fieldState, models,cubePolygons, models[0].object);
+			Print << count / 20;
 		}
-		
+		models = coloringModels(models);
+
 		//ClearPrint();
 		for (int i = 0; i < models.size(); i++) {
 			models[i].object.angle.w += delta / 3;
 		}
-		const double hue = Scene::Time() * 60.0;
-		models[0].shape[4].color = HSV(hue, 0.6, 1.0);
 
 		//視点移動
 		//camera.angle.w = Cursor::Pos().x - Scene::Center().x;
