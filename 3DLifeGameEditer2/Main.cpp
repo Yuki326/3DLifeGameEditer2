@@ -58,13 +58,10 @@ struct _Model {
 	_Vec3 zahyo; //ゲームのフィールド格子)上の座標
 	int hp;
 };
-struct LifeGameInfo {
-	Array<_Model> model;
-	Grid<int32> fieldstate;
-};
+
 AfinParameter3D viewingPiperine;
-const double CELL_PER = 0.01;
-const int SIDE_CELLS = 40;
+const double CELL_PER = 10;
+const int SIDE_CELLS = 30;
 // 共通
 _Vec3 changePos3D(_Vec3 p, AfinParameter3D afin) {
 	_Vec3 res;
@@ -289,9 +286,68 @@ Array<_Polygon3D> putModel(Array<_Polygon3D> models, _Vec3 pos) {
 	AfinParameter3D afin = { 1,0,0,pos.x,0,1,0,pos.y,0,0,1,pos.z,0,0,0,1 };
 	return transFormModel(models, afin);
 }
-LifeGameInfo setLifeGame(Array<_Polygon3D> cubePolygons, Object core) {
-	_Vec3 pos;
+Grid<int32> getField() {
 	Grid<int32> fieldState(SIDE_CELLS, SIDE_CELLS, 0);
+	for (int i = 0; i < SIDE_CELLS; i++) {
+		for (int j = 0; j < SIDE_CELLS; j++) {
+			for (int k = 0; k < SIDE_CELLS; k++) {
+				if (rand() % 10000 <= CELL_PER * 100) {
+					fieldState[i][j] |= 1 << k;
+				}
+			}
+		}
+	}
+	return fieldState;
+}
+bool isInField(_Vec3 p) {
+	bool check = true;
+	if (p.x<0 || p.x>=SIDE_CELLS)
+		check = false;
+	if (p.y<0 || p.y>=SIDE_CELLS)
+		check = false;
+	if (p.z < 0 || p.z >= SIDE_CELLS)
+		check = false;
+	return check;
+}
+double getCellScore(_Vec3 pos,Grid<int> field) {//指定したブロックの値を取得
+	_Vec3 p = {};
+	double score = 0;
+	bool isAlive = false;
+	for (int i = -1; i < 1; i++) {
+		for (int j = -1; j < 1; j++) {
+			for (int k = -1; k < 1; k++) {
+				p = _Vec3{ i + pos.x,j + pos.y,k + pos.z };
+				if (isInField(p)) {
+					isAlive = field[int(p.x)][int(p.y)] >> int(p.z) & 1;
+					if (i * j * k == 0 && isAlive) {
+						score++;
+					}
+					else if (isAlive) {
+						score += 0.5;
+					}
+				}
+			}
+		}
+	}
+	return score;
+}
+Grid<int32> getNextField(Grid<int32> current) {
+	Grid<int32> next(SIDE_CELLS, SIDE_CELLS, 0);
+	double tmp;
+	for (int i = 0; i < SIDE_CELLS; i++) {
+		for (int j = 0; j < SIDE_CELLS; j++) {
+			for (int k = 0; k < SIDE_CELLS; k++) {
+				tmp = getCellScore(_Vec3{ double(i),double(j),double(k) },current);
+				if (tmp >= 3 && tmp <= 7) {
+					next[i][j] |= 1 << k;
+				}
+			}
+		}
+	}
+	return next;
+}
+Array<_Model> fieldToModels(Grid<int32> field, Array<_Polygon3D> cubePolygons, Object core) {
+	_Vec3 pos;
 	Array<_Polygon3D> framePolygons = resizeModel(cubePolygons, 60);
 	framePolygons = paintModel(framePolygons, { 0,255,0,45 });
 	Array<_Polygon3D> framePolygons2 = resizeModel(framePolygons, 0.1);
@@ -304,14 +360,13 @@ LifeGameInfo setLifeGame(Array<_Polygon3D> cubePolygons, Object core) {
 			pos.y = 4 * (j - SIDE_CELLS / 2);
 			for (int k = 0; k < SIDE_CELLS; k++) {
 				pos.z = 4 * (k - SIDE_CELLS / 2);
-				if (rand() % 10000 <= CELL_PER * 100) {
+				if (field[i][j] >> k & 1) {
 					models << _Model{ putModel(cubePolygons,pos), core, { double(i),double(j),double(k) }, 100 };
-					fieldState[i][j] &= 1 << k;
 				}
 			}
 		}
 	}
-	return LifeGameInfo{ models,fieldState };
+	return models;
 }
 void Main()
 {
@@ -362,16 +417,14 @@ void Main()
 	Object ex2 = { Angle{0,-12},_Vec3{0,-40,500} };
 	Object ex3 = { Angle{0,-12},_Vec3{50,50,50} };
 
-	LifeGameInfo data = setLifeGame(cubePolygons, core);
-	Array<_Model> models = data.model;
 	Grid<int32> fieldState(SIDE_CELLS, SIDE_CELLS, 0);//３次元配列　z軸は2進数で管理
-	fieldState = data.fieldstate;
-
+	fieldState = getField();
+	Array<_Model> models = fieldToModels(fieldState, cubePolygons, core);
 
 	//モデリング変換
 	Array<_Model> models_W = toWorld(models);
 	Object camera = { Angle{0,10},_Vec3{0,0,0} };
-
+	int count = 0;
 	while (System::Update())
 	{
 		const double delta = 200 * Scene::DeltaTime();
@@ -407,12 +460,16 @@ void Main()
 		}
 		if (SimpleGUI::Button(U"Reset", Vec2(600, 300), 200))
 		{
-			LifeGameInfo data = setLifeGame(cubePolygons, core);
-			models = data.model;
-			fieldState = data.fieldstate;
+			fieldState = getField();
+			models = fieldToModels(fieldState, cubePolygons, core);
 		}
-
-		ClearPrint();
+		if (count % 60 == 0) {
+			fieldState = getNextField(fieldState);
+			models = fieldToModels(fieldState, cubePolygons, models[0].object);
+			Print << count / 60;
+		}
+		
+		//ClearPrint();
 		for (int i = 0; i < models.size(); i++) {
 			models[i].object.angle.w += delta / 3;
 		}
@@ -420,8 +477,8 @@ void Main()
 		models[0].shape[4].color = HSV(hue, 0.6, 1.0);
 
 		//視点移動
-		camera.angle.w = Cursor::Pos().x - Scene::Center().x;
-		camera.angle.h = Cursor::Pos().y - Scene::Center().y;
+		//camera.angle.w = Cursor::Pos().x - Scene::Center().x;
+		//camera.angle.h = Cursor::Pos().y - Scene::Center().y;
 
 		//モデリング変換
 		models_W = toWorld(models);
@@ -441,7 +498,7 @@ void Main()
 			_t.draw(t.color);  return 0;
 		});
 
-
+		count++;
 		//デバッグ
 		//Print << Cursor::Pos(); // 現在のマウスカーソル座標を表示
 		//Print << camera.angle.w;
