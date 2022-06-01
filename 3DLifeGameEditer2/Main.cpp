@@ -305,7 +305,7 @@ LifeGameInfo setLifeGame(Array<_Polygon3D> cubePolygons, Object core) {
 			for (int k = 0; k < SIDE_CELLS; k++) {
 				pos.z = 4 * (k - SIDE_CELLS / 2);
 				if (rand() % 10000 <= CELL_PER * 100) {
-					models << _Model{ putModel(cubePolygons,pos), core, { i,j,k }, 100 };
+					models << _Model{ putModel(cubePolygons,pos), core, { double(i),double(j),double(k) }, 100 };
 					fieldState[i][j] &= 1 << k;
 				}
 			}
