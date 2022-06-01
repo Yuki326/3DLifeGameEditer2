@@ -23,10 +23,7 @@ struct Angle {
 	double w;
 	double h;
 };
-struct _Vec2 {
-	double x;
-	double y;
-};
+
 struct _Vec3 {
 	double x;
 	double y;
@@ -37,9 +34,9 @@ struct Object {
 	_Vec3 pos;
 };
 struct _Triangle2D {
-	_Vec2 p0;
-	_Vec2 p1;
-	_Vec2 p2;
+	Vec2 p0;
+	Vec2 p1;
+	Vec2 p2;
 };
 struct _Triangle3D {
 	_Vec3 p0;
@@ -52,7 +49,7 @@ struct _Polygon3D {
 	Color color;
 };
 struct _Polygon {
-	Triangle points;
+	_Triangle2D points;
 	Color color;
 };
 struct _Model {
@@ -423,8 +420,8 @@ void Main()
 		models[0].shape[4].color = HSV(hue, 0.6, 1.0);
 
 		//視点移動
-		//camera.angle.w = Cursor::Pos().x - Scene::Center().x;
-		//camera.angle.h = Cursor::Pos().y - Scene::Center().y;
+		camera.angle.w = Cursor::Pos().x - Scene::Center().x;
+		camera.angle.h = Cursor::Pos().y - Scene::Center().y;
 
 		//モデリング変換
 		models_W = toWorld(models);
@@ -437,14 +434,17 @@ void Main()
 
 		// ビューポート変換
 		t = moveCenterModel(t);
-
+		Triangle _t;
 		//描画
-		t.map([](_Polygon t) {t.points.draw(t.color);  return 0; });
+		t.map([](_Polygon t) {
+			Triangle _t = { t.points.p0,t.points.p1,t.points.p2 };
+			_t.draw(t.color);  return 0;
+		});
 
 
 		//デバッグ
-		Print << Cursor::Pos(); // 現在のマウスカーソル座標を表示
-		Print << camera.angle.w;
+		//Print << Cursor::Pos(); // 現在のマウスカーソル座標を表示
+		//Print << camera.angle.w;
 	}
 }
 
