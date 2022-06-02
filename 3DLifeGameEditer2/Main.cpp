@@ -163,22 +163,22 @@ int polygon_side_chk(_Triangle3D t, _Vec3 v) {
 	return 0;
 }
 //三角形の中心のz座標を比較
-bool isFartherTriangle(_Polygon3D t, _Polygon3D a) {
-	double targetDist = t.points.p0.z + t.points.p1.z + t.points.p2.z;
-	double dist = a.points.p0.z + a.points.p1.z + a.points.p2.z;
-	return targetDist > dist;
+int isFartherTriangle(const void *t, const void *a) {
+	double targetDist = ((_Polygon3D *)t)->points.p0.z + ((_Polygon3D*)t)->points.p1.z + ((_Polygon3D*)t)->points.p2.z;
+	double dist = ((_Polygon3D*)a)->points.p0.z + ((_Polygon3D*)a)->points.p1.z + ((_Polygon3D*)a)->points.p2.z;
+	return 	targetDist < dist ? 1 : 0; 
 }
 //三角形を中心のz座標を基準に大きい順で並び替え
 Array<_Polygon3D> sortTriangle3D(Array<_Polygon3D> triangles) {//奥行ソート
-	for (int i = 0; i < triangles.size(); i++) {//todo 速いソートに変更
-		for (int j = i; j < triangles.size(); j++) {
-			if (isFartherTriangle(triangles[i], triangles[j])) {
-				_Polygon3D tmp = triangles[i];
-				triangles[i] = triangles[j];
-				triangles[j] = tmp;
-			}
-		}
+	_Polygon3D* heap;
+	heap = (_Polygon3D*)malloc(sizeof(_Polygon3D) * triangles.size());
+	if (heap == NULL) exit(0);
+
+	for (int i = 0; i < triangles.size(); i++) {
+		heap[i] = triangles[i];
 	}
+	qsort(heap, sizeof(triangles) / sizeof(triangles[0]), sizeof(_Polygon3D), isFartherTriangle);
+	free(heap);
 	return triangles;
 }
 // 投影変換　3次元空間上の点を2次元に配置
