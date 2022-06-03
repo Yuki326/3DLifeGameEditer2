@@ -171,14 +171,22 @@ int isFartherTriangle(const void *t, const void *a) {
 //三角形を中心のz座標を基準に大きい順で並び替え
 Array<_Polygon3D> sortTriangle3D(Array<_Polygon3D> triangles) {//奥行ソート
 	_Polygon3D* heap;
-	heap = (_Polygon3D*)malloc(sizeof(_Polygon3D) * triangles.size());
+	heap = (_Polygon3D*)malloc(sizeof(_Polygon3D) * triangles.size());//メモリの確保
 	if (heap == NULL) exit(0);
 
 	for (int i = 0; i < triangles.size(); i++) {
 		heap[i] = triangles[i];
 	}
-	qsort(heap, sizeof(triangles) / sizeof(triangles[0]), sizeof(_Polygon3D), isFartherTriangle);
-	free(heap);
+	qsort(heap, sizeof(heap) / sizeof(heap[0]), sizeof(_Polygon3D), isFartherTriangle);
+	for (int i = 0; i < triangles.size(); i++) {
+		triangles[i] = heap[i];
+	}
+	free(heap);//メモリの解放
+	for (int i = 0; i < triangles.size(); i++) {//デバッグ
+		double dist = triangles[i].points.p0.z + triangles[i].points.p1.z + triangles[i].points.p2.z;
+		Rect(0, i*10, dist/20,10).draw();
+	}
+
 	return triangles;
 }
 // 投影変換　3次元空間上の点を2次元に配置
@@ -199,7 +207,7 @@ _Polygon renderTriangle(_Polygon3D t) {
 // 立体を2dに変換
 Array<_Polygon> renderModel(Array<_Polygon3D> triangles) {
 	_Polygon n = {};
-	triangles = sortTriangle3D(triangles);
+	//triangles = sortTriangle3D(triangles);
 
 	return triangles.map([n](_Polygon3D t) { return polygon_side_chk(t.points, _Vec3{ 0,0,1 }) ? renderTriangle(t) : n; });
 }
@@ -213,15 +221,6 @@ Array<_Polygon> render(Array<_Model> models) {
 		}
 	}
 	return res;
-	//Array<_Polygon3D> all;//ポリゴン数が増えるとソートに時間がかかるため一旦コメントアウト
-	//Array<_Polygon3D> toAdd;
-	//for (int i = 0; i < models.size(); i++) {
-		//toAdd = models[i].shape;
-		//for (int j = 0; j < toAdd.size(); j++) {
-			//all << toAdd[j];
-		//}
-	//}
-	//return renderModel(all);
 }
 //ビューポート変換(画面に収める範囲の調整)
 Vec2 moveCenterPos(Vec2 p) {
@@ -324,15 +323,28 @@ bool isInField(_Vec3 p) {
 	return check;
 }
 
-// 周囲のセルに応じた指定したセルの値を取得
-double getCellScore(_Vec3 pos, Grid<int> field) {//指定したブロックの値を取得
-	_Vec3 p = {};
+// 周囲のセルに応じたセルの状態を取得
+bool getCellState(_Vec3 pos, Grid<int> field) {//指定したブロックの値を取得
+	_Vec3 p;
 	double score = 0;
 	bool isAlive = false;
-	for (int i = -1; i < 1; i++) {
-		for (int j = -1; j < 1; j++) {
-			for (int k = -1; k < 1; k++) {
+	//for (int i = 0; i <= 1; i++) {
+		//for (int j = 0; j <= 1; j++) {
+			//for (int k = 0; k <= 1; k++) {
+				//if (i == 0 && j == 0 && k==0)continue;
+				//p[0] = _Vec3{ i + pos.x,j + pos.y,k + pos.z };
+				//p[1] = _Vec3{ -i + pos.x,-j + pos.y,-k + pos.z };
+				//for (int i = 0; i < 2; i++) {
+
+				//}
+			//}
+		//}
+	//}
+	for (int i = -1; i <= 1; i++) {
+		for (int j = -1; j <= 1; j++) {
+			for (int k = -1; k <= 1; k++) {
 				p = _Vec3{ i + pos.x,j + pos.y,k + pos.z };
+				if (i==0&&j==0&&k==0)continue;
 				if (isInField(p)) {
 					isAlive = field[int(p.x)][int(p.y)] >> int(p.z) & 1;
 					if (i * j * k == 0 && isAlive) {
@@ -346,24 +358,26 @@ double getCellScore(_Vec3 pos, Grid<int> field) {//指定したブロックの�
 			}
 		}
 	}
-	return score;
+	bool res = false;
+	if (field[int(pos.x)][int(pos.y)] >> int(pos.z) & 1) {
+		if (score >= 6 && score <= 10)res = true;
+	}
+	else {
+		if (score >= 7 && score <= 9)res = true;
+	}
+	return res;
 }
 
 // 次のフィールドの状態を取得
 Grid<int32> getNextField(Grid<int32> current) {
 	Grid<int32> next(SIDE_CELLS, SIDE_CELLS, 0);
-	double tmp;
+	bool isAlive;
 	for (int i = 0; i < SIDE_CELLS; i++) {
 		for (int j = 0; j < SIDE_CELLS; j++) {
 			for (int k = 0; k < SIDE_CELLS; k++) {
-				tmp = getCellScore(_Vec3{ double(i),double(j),double(k) }, current);
-				if (tmp >= 3 && tmp <= 9) {
-					if (current[i][j] >> k & 1) {//生存
-						next[i][j] |= 1 << k;//1に書き換え
-					}
-					else if (tmp >= 4 && tmp <= 8) {//誕生
-						next[i][j] |= 1 << k;//1に書き換え
-					}
+				isAlive = getCellState(_Vec3{ double(i),double(j),double(k) }, current);
+				if (isAlive) {
+					next[i][j] |= 1 << k;//1に書き換え
 				}
 			}
 		}
@@ -414,7 +428,7 @@ Array<_Model> coloringModels(Array<_Model> models) {
 	};
 	for (int i = 1; i < models.size(); i++) {//0は例外
 		double hue = getDistToCore(models[i].zahyo);
-		models[i].shape = paintModel(models[i].shape, HSV{ hue,0.6,1.0 });
+		models[i].shape = paintModel(models[i].shape, HSV{ hue*3,0.6,1.0 });
 		//if (models[i].hp) {
 			//res << models[i];
 		//}
@@ -474,7 +488,7 @@ void Main()
 	fieldState = getField();
 	Array<_Model> models = {};
 	models = fieldToModels(fieldState, models, cubePolygons, core);
-	//models = coloringModels(models);
+	models = coloringModels(models);
 	//モデリング変換
 	Array<_Model> models_W = toWorld(models);
 	Object camera = { Angle{0,10},_Vec3{0,-100,0} };
@@ -520,7 +534,6 @@ void Main()
 		if (count % 20 == 0) {
 			fieldState = getNextField(fieldState);
 			models = fieldToModels(fieldState, models, cubePolygons, models[0].object);
-			Print << count / 20;
 		}
 		models = coloringModels(models);
 
