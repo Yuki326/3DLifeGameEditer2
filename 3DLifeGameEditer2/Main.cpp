@@ -58,6 +58,10 @@ struct _Model {
 	_Vec3 zahyo; //ゲームのフィールド格子)上の座標
 	int hp;
 };
+struct _distTable {
+	int id;
+	double dist;
+};
 
 AfinParameter3D viewingPiperine;
 const double CELL_PER = 25;
@@ -163,31 +167,65 @@ int polygon_side_chk(_Triangle3D t, _Vec3 v) {
 	return 0;
 }
 //三角形の中心のz座標を比較
-int isFartherTriangle(const void *t, const void *a) {
-	double targetDist = ((_Polygon3D *)t)->points.p0.z + ((_Polygon3D*)t)->points.p1.z + ((_Polygon3D*)t)->points.p2.z;
-	double dist = ((_Polygon3D*)a)->points.p0.z + ((_Polygon3D*)a)->points.p1.z + ((_Polygon3D*)a)->points.p2.z;
-	return 	targetDist < dist ? 1 : 0; 
+int isFartherModel(const void* t, const void* a) {
+	double targetDist = ((_distTable*)t)->dist;
+	double dist = ((_distTable*)a)->dist;
+	if (targetDist > dist)
+	{
+		return 1;
+	}
+	else if (targetDist < dist)
+	{
+		return -1;
+	}
+	else
+	{
+		return 0;
+	}
+	//return 	targetDist < dist ? 1 : -1;
 }
+bool isFartherModel2(_Vec3 t, _Vec3 a) {
+	return t.z > a.z;
+}
+
 //三角形を中心のz座標を基準に大きい順で並び替え
-Array<_Polygon3D> sortTriangle3D(Array<_Polygon3D> triangles) {//奥行ソート
-	_Polygon3D* heap;
-	heap = (_Polygon3D*)malloc(sizeof(_Polygon3D) * triangles.size());//メモリの確保
-	if (heap == NULL) exit(0);
+Array<_Model> sortModel(Array<_Model> models) {//奥行ソート
+	_distTable *heap;
+	heap = (_distTable*)malloc(sizeof(_distTable) * models.size());//メモリの確保
 
-	for (int i = 0; i < triangles.size(); i++) {
-		heap[i] = triangles[i];
+	for (int i = 0; i < models.size(); i++) {
+		heap[i].id = i;
+		heap[i].dist = models[i].shape[0].points.p0.z;
 	}
-	qsort(heap, sizeof(heap) / sizeof(heap[0]), sizeof(_Polygon3D), isFartherTriangle);
-	for (int i = 0; i < triangles.size(); i++) {
-		triangles[i] = heap[i];
+	_distTable a[3] = { {1,200},{1,300},{1,100} };
+	qsort(a, 3, sizeof(a[0]), isFartherModel);
+	qsort(heap, models.size(), sizeof(heap[0]), isFartherModel);
+
+	Array<_Model> res;
+	
+	
+	for (int i = 0; i < models.size(); i++) {//デバッグ
+		double dist = models[heap[i].id].shape[0].points.p0.z;
+		//Rect(0, i * 2, dist / 2, 2).draw();
+		res << models[heap[i].id];
 	}
-	free(heap);//メモリの解放
-	for (int i = 0; i < triangles.size(); i++) {//デバッグ
-		double dist = triangles[i].points.p0.z + triangles[i].points.p1.z + triangles[i].points.p2.z;
-		Rect(0, i*10, dist/20,10).draw();
+	free(heap);
+	return res;
+}
+Array<_Model> sortModel2(Array<_Model> models) {//奥行ソート
+
+	for (int i = 0; i < models.size(); i++) {
+		for (int j = i; j < models.size(); j++) {
+			if (isFartherModel2(models[j].shape[0].points.p0, models[i].shape[0].points.p0)) {
+				_Model tmp = models[i];
+				models[i] = models[j];
+				models[j] = tmp;
+			}
+		}
 	}
 
-	return triangles;
+
+	return models;
 }
 // 投影変換　3次元空間上の点を2次元に配置
 Vec2 toVec2(_Vec3 pos) {
@@ -207,13 +245,13 @@ _Polygon renderTriangle(_Polygon3D t) {
 // 立体を2dに変換
 Array<_Polygon> renderModel(Array<_Polygon3D> triangles) {
 	_Polygon n = {};
-	//triangles = sortTriangle3D(triangles);
 
 	return triangles.map([n](_Polygon3D t) { return polygon_side_chk(t.points, _Vec3{ 0,0,1 }) ? renderTriangle(t) : n; });
 }
 //　複数の立体を2dに変換
 Array<_Polygon> render(Array<_Model> models) {
 	Array<_Polygon> res = {};
+	models = sortModel(models);
 	for (int i = 0; i < models.size(); i++) {
 		Array<_Polygon> toAdd = renderModel(models[i].shape);
 		for (int j = 0; j < toAdd.size(); j++) {
@@ -344,7 +382,7 @@ bool getCellState(_Vec3 pos, Grid<int> field) {//指定したブロックの値�
 		for (int j = -1; j <= 1; j++) {
 			for (int k = -1; k <= 1; k++) {
 				p = _Vec3{ i + pos.x,j + pos.y,k + pos.z };
-				if (i==0&&j==0&&k==0)continue;
+				if (i == 0 && j == 0 && k == 0)continue;
 				if (isInField(p)) {
 					isAlive = field[int(p.x)][int(p.y)] >> int(p.z) & 1;
 					if (i * j * k == 0 && isAlive) {
@@ -354,7 +392,7 @@ bool getCellState(_Vec3 pos, Grid<int> field) {//指定したブロックの値�
 						score += 0.5;
 					}
 				}
-				
+
 			}
 		}
 	}
@@ -428,7 +466,7 @@ Array<_Model> coloringModels(Array<_Model> models) {
 	};
 	for (int i = 1; i < models.size(); i++) {//0は例外
 		double hue = getDistToCore(models[i].zahyo);
-		models[i].shape = paintModel(models[i].shape, HSV{ hue*3,0.6,1.0 });
+		models[i].shape = paintModel(models[i].shape, HSV{ hue * 3,0.6,1.0 });
 		//if (models[i].hp) {
 			//res << models[i];
 		//}
