@@ -64,10 +64,12 @@ struct _distTable {
 };
 
 AfinParameter3D viewingPiperine;
-const double CELL_PER = 10;
+const double CELL_PER = 5;
 const int SIDE_CELLS = 15;
+const int MARGIN = 5;
 const int CELL_SIZE = 6;
 const int MAX_HP = 200;
+const int HISTORY_SIZE = 1000;
 // 共通
 _Vec3 changePos3D(_Vec3 p, AfinParameter3D afin) {//点の座標変換
 	_Vec3 res;
@@ -170,19 +172,7 @@ int polygon_side_chk(_Triangle3D t, _Vec3 v) {
 int isFartherModel(const void* t, const void* a) {
 	double targetDist = ((_distTable*)t)->dist;
 	double dist = ((_distTable*)a)->dist;
-	if (targetDist > dist)
-	{
-		return 1;
-	}
-	else if (targetDist < dist)
-	{
-		return -1;
-	}
-	else
-	{
-		return 0;
-	}
-	//return 	targetDist < dist ? 1 : -1;
+	return 	targetDist > dist ? 1 : -1;
 }
 bool isFartherModel2(_Vec3 t, _Vec3 a) {
 	return t.z > a.z;
@@ -336,17 +326,23 @@ Array<_Polygon3D> putModel(Array<_Polygon3D> models, _Vec3 pos) {
 	return transFormModel(models, afin);
 }
 // 初期配置をランダムで取得
-Grid<int32> getField() {
-	Grid<int32> fieldState(SIDE_CELLS, SIDE_CELLS, 0);
-	for (int i = 4; i < SIDE_CELLS-4; i++) {
-		for (int j = 4; j < SIDE_CELLS-4; j++) {
-			for (int k = 4; k < SIDE_CELLS-4; k++) {
+Grid<int32> addField(Grid<int32> fieldState) {
+	int mx = rand() % MARGIN;
+	int my = rand() % MARGIN;
+	int mz = rand() % MARGIN;
+	for (int i = MARGIN-mx; i < SIDE_CELLS-mx; i++) {
+		for (int j = MARGIN - my; j < SIDE_CELLS-my; j++) {
+			for (int k = MARGIN - mz; k < SIDE_CELLS-mz; k++) {
 				if (rand() % 10000 <= CELL_PER * 100) {
 					fieldState[i][j] |= 1 << k;
 				}
 			}
 		}
 	}
+	return fieldState;
+}
+Grid<int32> getVoidField() {
+	Grid<int32> fieldState(SIDE_CELLS, SIDE_CELLS, 0);
 	return fieldState;
 }
 // フィールドの範囲内か判定
@@ -425,9 +421,15 @@ Array<_Model> fieldToModels(Grid<int32> field, Array<_Model> current, Array<_Pol
 	Array<_Polygon3D> framePolygons = resizeModel(cubePolygons, SIDE_CELLS + 1);
 	framePolygons = paintModel(framePolygons, { 0,255,0,0 });
 	Array<_Model> models = {
-		//{framePolygons,core,{0,0,0},100},
+		{framePolygons,core,{0,0,0},-1},//仮のバグ対策
+		{framePolygons,core,{0,0,0},-1},
+		{framePolygons,core,{0,0,0},-1},
+		{framePolygons,core,{0,0,0},-1},
+		{framePolygons,core,{0,0,0},-1},
+		{framePolygons,core,{0,0,0},-1},
 	};
 	_Vec3 p = {};
+
 	for (int i = 0; i < current.size(); i++) {
 		p = current[i].zahyo;
 		if (field[int(p.x)][int(p.y)] >> int(p.z) & 1) {
@@ -456,20 +458,33 @@ double getDistToCore(_Vec3 p) {
 	double z = p.z - SIDE_CELLS / 2;
 	return x * x + y * y + z * z;
 }
+
 //　中心からの距離に応じて色を変える
 Array<_Model> coloringModels(Array<_Model> models) {
 	Array<_Model> res = {
 		models[0]
 	};
-	for (int i = 1; i < models.size(); i++) {//0は例外
+	for (int i = 0; i < models.size(); i++) {
 		double hue = getDistToCore(models[i].zahyo);
+		if(models[i].hp>0)
 		models[i].shape = paintModel(models[i].shape, HSV{ hue * 3,0.6,1.0 });
-
-		//if (models[i].hp) {
-			//res << models[i];
-		//}
 	}
 	return models;
+}
+int incrementInRing(int i,int add, int size) {
+	return (i + add) % size;
+}
+void drawGraph(Array<int> history, int now) {
+	int i = (now + HISTORY_SIZE - Scene::Width()) % HISTORY_SIZE;
+	int next = i;
+	int count = 0;
+	while (count < Scene::Width()-1) {
+		Line(count,Scene::Height()-history[i]/4,count+1, Scene::Height()-history[next]/4).draw(2);
+		i++;
+		i %= HISTORY_SIZE;
+		next = incrementInRing(i, 1, HISTORY_SIZE);
+		count++;
+	}
 }
 void Main()
 {
@@ -521,14 +536,16 @@ void Main()
 	Object ex3 = { Angle{0,-12},_Vec3{50,50,50} };
 
 	Grid<int32> fieldState(SIDE_CELLS, SIDE_CELLS, 0);//３次元配列　z軸は2進数で管理
-	fieldState = getField();
+	fieldState = addField(fieldState);
 	Array<_Model> models = {};
 	models = fieldToModels(fieldState, models, cubePolygons, core);
 	models = coloringModels(models);
 	//モデリング変換
 	Array<_Model> models_W = toWorld(models);
 	Object camera = { Angle{0,10},_Vec3{0,-100,0} };
-	int count = 0;
+	int time = 0;
+	Array<int> history(HISTORY_SIZE,0);
+	int now = 0;
 	while (System::Update())
 	{
 		const double delta = 200 * Scene::DeltaTime();
@@ -562,12 +579,17 @@ void Main()
 		{
 			models[1].object.pos.y -= delta;
 		}
-		if (SimpleGUI::Button(U"Reset", Vec2(600, 300), 200))
+		if (SimpleGUI::Button(U"Add", Vec2(600, 300), 200))
 		{
-			fieldState = getField();
+			fieldState = addField(fieldState);
 			models = fieldToModels(fieldState, models, cubePolygons, core);
 		}
-		if (count % 10 == 0) {
+		if (SimpleGUI::Button(U"Clear", Vec2(600, 400), 200))
+		{
+			fieldState = getVoidField();
+			models = fieldToModels(fieldState, models, cubePolygons, core);
+		}
+		if (time % 10 == 0) {
 			fieldState = getNextField(fieldState);
 			models = fieldToModels(fieldState, models, cubePolygons, models[0].object);
 		}
@@ -599,7 +621,14 @@ void Main()
 			_t.draw(t.color);  return 0;
 			});
 
-		count++;
+		//履歴
+		if (time % 10) {
+			history[now] = models.size();
+			now++;
+			now %= HISTORY_SIZE;
+		}
+		drawGraph(history, now);
+		time++;
 		//デバッグ
 		//Print << Cursor::Pos(); // 現在のマウスカーソル座標を表示
 		//Print << camera.angle.w;
