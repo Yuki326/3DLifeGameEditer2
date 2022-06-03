@@ -64,7 +64,7 @@ struct _distTable {
 };
 
 AfinParameter3D viewingPiperine;
-const double CELL_PER = 25;
+const double CELL_PER = 10;
 const int SIDE_CELLS = 15;
 const int CELL_SIZE = 6;
 const int MAX_HP = 200;
@@ -338,9 +338,9 @@ Array<_Polygon3D> putModel(Array<_Polygon3D> models, _Vec3 pos) {
 // 初期配置をランダムで取得
 Grid<int32> getField() {
 	Grid<int32> fieldState(SIDE_CELLS, SIDE_CELLS, 0);
-	for (int i = 0; i < SIDE_CELLS; i++) {
-		for (int j = 0; j < SIDE_CELLS; j++) {
-			for (int k = 0; k < SIDE_CELLS; k++) {
+	for (int i = 4; i < SIDE_CELLS-4; i++) {
+		for (int j = 4; j < SIDE_CELLS-4; j++) {
+			for (int k = 4; k < SIDE_CELLS-4; k++) {
 				if (rand() % 10000 <= CELL_PER * 100) {
 					fieldState[i][j] |= 1 << k;
 				}
@@ -363,46 +363,43 @@ bool isInField(_Vec3 p) {
 
 // 周囲のセルに応じたセルの状態を取得
 bool getCellState(_Vec3 pos, Grid<int> field) {//指定したブロックの値を取得
-	_Vec3 p;
+	_Vec3 p[2];
 	double score = 0;
 	bool isAlive = false;
-	//for (int i = 0; i <= 1; i++) {
-		//for (int j = 0; j <= 1; j++) {
-			//for (int k = 0; k <= 1; k++) {
-				//if (i == 0 && j == 0 && k==0)continue;
-				//p[0] = _Vec3{ i + pos.x,j + pos.y,k + pos.z };
-				//p[1] = _Vec3{ -i + pos.x,-j + pos.y,-k + pos.z };
-				//for (int i = 0; i < 2; i++) {
-
-				//}
-			//}
-		//}
-	//}
-	for (int i = -1; i <= 1; i++) {
-		for (int j = -1; j <= 1; j++) {
-			for (int k = -1; k <= 1; k++) {
-				p = _Vec3{ i + pos.x,j + pos.y,k + pos.z };
-				if (i == 0 && j == 0 && k == 0)continue;
-				if (isInField(p)) {
-					isAlive = field[int(p.x)][int(p.y)] >> int(p.z) & 1;
-					if (i * j * k == 0 && isAlive) {
-						score++;
-					}
-					else if (isAlive) {
-						score += 0.5;
+	int state;
+	int count = 0;
+	for (int i = 0; i <= 1; i++) {
+		for (int j = 0; j <= 1; j++) {
+			for (int k = 0; k <= 1; k++) {
+				if (i == 0 && j == 0 && k==0)continue;
+				p[0] = _Vec3{ i + pos.x,j + pos.y,k + pos.z };
+				p[1] = _Vec3{ -i + pos.x,-j + pos.y,-k + pos.z };
+				state = 0;
+				for (int i = 0; i < 2; i++) {
+					if (isInField(p[i])) {
+						isAlive = field[int(p[i].x)][int(p[i].y)] >> int(p[i].z) & 1;
+						state |= isAlive << i;
+						if (i * j * k == 0 && isAlive) {
+							score++;
+						}
+						else if (isAlive) {
+							score += 0.5;
+						}
 					}
 				}
-
+				if (state == 0x11) count++;
 			}
 		}
 	}
+	
 	bool res = false;
 	if (field[int(pos.x)][int(pos.y)] >> int(pos.z) & 1) {
-		if (score >= 6 && score <= 10)res = true;
+		if (score >= 4 && score <= 6)res = true;
 	}
 	else {
-		if (score >= 7 && score <= 9)res = true;
+		if (score >= 3 && score <= 5)res = true;
 	}
+	if (count > 0)res = false;
 	return res;
 }
 
@@ -426,9 +423,9 @@ Grid<int32> getNextField(Grid<int32> current) {
 // フィールドの状態をもとに立体を取得
 Array<_Model> fieldToModels(Grid<int32> field, Array<_Model> current, Array<_Polygon3D> cubePolygons, Object core) {
 	Array<_Polygon3D> framePolygons = resizeModel(cubePolygons, SIDE_CELLS + 1);
-	framePolygons = paintModel(framePolygons, { 0,255,0,35 });
+	framePolygons = paintModel(framePolygons, { 0,255,0,0 });
 	Array<_Model> models = {
-		{framePolygons,core,{0,0,0},100},
+		//{framePolygons,core,{0,0,0},100},
 	};
 	_Vec3 p = {};
 	for (int i = 0; i < current.size(); i++) {
@@ -467,6 +464,7 @@ Array<_Model> coloringModels(Array<_Model> models) {
 	for (int i = 1; i < models.size(); i++) {//0は例外
 		double hue = getDistToCore(models[i].zahyo);
 		models[i].shape = paintModel(models[i].shape, HSV{ hue * 3,0.6,1.0 });
+
 		//if (models[i].hp) {
 			//res << models[i];
 		//}
@@ -569,7 +567,7 @@ void Main()
 			fieldState = getField();
 			models = fieldToModels(fieldState, models, cubePolygons, core);
 		}
-		if (count % 20 == 0) {
+		if (count % 10 == 0) {
 			fieldState = getNextField(fieldState);
 			models = fieldToModels(fieldState, models, cubePolygons, models[0].object);
 		}
