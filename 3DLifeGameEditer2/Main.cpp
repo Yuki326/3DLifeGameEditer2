@@ -62,7 +62,11 @@ struct _distTable {
 	int id;
 	double dist;
 };
-
+struct star {//一番後ろのレイヤーで左から右に動かす
+	Vec2 pos;
+	double size;
+	double speed;
+};
 AfinParameter3D viewingPiperine;
 const double CELL_PER = 5;
 const int SIDE_CELLS = 15;
@@ -488,6 +492,7 @@ void drawGraph(Array<int> history, int now) {
 }
 void Main()
 {
+	srand(time(NULL));
 	// 背景を黒にする
 	Scene::SetBackground(Palette::Black);
 
@@ -549,8 +554,8 @@ void Main()
 	Vec2 center = Scene::Center();
 	Vec2 Button1 = { center.x - 270, center.y + 180 };
 	Vec2 Button2 = { center.x + 270, center.y + 180 };
-	const Circle addButton(Button1, 80);
-	const Circle clearButton(Button2, 80);
+	const RectF addButton(Arg::center(Button1), 80,80);
+	const RectF clearButton(Arg::center(Button2), 80);
 
 	while (System::Update())
 	{
@@ -633,11 +638,11 @@ void Main()
 			now++;
 			now %= HISTORY_SIZE;
 		}
-		Circle(Button1, 80).draw(Color(242, 10, 32));
-		Circle(Button1, 60).draw(Color(245, 88, 52));
-		addButton.draw(addButton.mouseOver() ? Color(0,0,0,0): Color(0,0,0,40));
-		Circle(Button2, 80).draw(Color(2,210, 22));
-		Circle(Button2, 60).draw(Color(10, 244, 32));
+		RectF(Arg::center(Button1), 80).draw(Color(242, 10, 32));
+		RectF(Arg::center(Button1), 60).draw(Color(245, 88, 52));
+		addButton.draw(addButton.mouseOver() ? Color(0, 0, 0, 0) : Color(0, 0, 0, 40));
+		RectF(Arg::center(Button2), 80).draw(Color(2, 210, 22));
+		RectF(Arg::center(Button2), 60).draw(Color(10, 244, 32));
 		clearButton.draw(clearButton.mouseOver() ? Color(0, 0, 0, 0) : Color(0, 0, 0, 40));
 		drawGraph(history, now);
 
