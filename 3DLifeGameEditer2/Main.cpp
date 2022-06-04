@@ -180,7 +180,7 @@ bool isFartherModel2(_Vec3 t, _Vec3 a) {
 
 //三角形を中心のz座標を基準に大きい順で並び替え
 Array<_Model> sortModel(Array<_Model> models) {//奥行ソート
-	_distTable *heap;
+	_distTable* heap;
 	heap = (_distTable*)malloc(sizeof(_distTable) * models.size());//メモリの確保
 
 	for (int i = 0; i < models.size(); i++) {
@@ -192,8 +192,8 @@ Array<_Model> sortModel(Array<_Model> models) {//奥行ソート
 	qsort(heap, models.size(), sizeof(heap[0]), isFartherModel);
 
 	Array<_Model> res;
-	
-	
+
+
 	for (int i = 0; i < models.size(); i++) {//デバッグ
 		double dist = models[heap[i].id].shape[0].points.p0.z;
 		//Rect(0, i * 2, dist / 2, 2).draw();
@@ -330,9 +330,9 @@ Grid<int32> addField(Grid<int32> fieldState) {
 	int mx = rand() % MARGIN;
 	int my = rand() % MARGIN;
 	int mz = rand() % MARGIN;
-	for (int i = MARGIN-mx; i < SIDE_CELLS-mx; i++) {
-		for (int j = MARGIN - my; j < SIDE_CELLS-my; j++) {
-			for (int k = MARGIN - mz; k < SIDE_CELLS-mz; k++) {
+	for (int i = MARGIN - mx; i < SIDE_CELLS - mx; i++) {
+		for (int j = MARGIN - my; j < SIDE_CELLS - my; j++) {
+			for (int k = MARGIN - mz; k < SIDE_CELLS - mz; k++) {
 				if (rand() % 10000 <= CELL_PER * 100) {
 					fieldState[i][j] |= 1 << k;
 				}
@@ -367,7 +367,7 @@ bool getCellState(_Vec3 pos, Grid<int> field) {//指定したブロックの値�
 	for (int i = 0; i <= 1; i++) {
 		for (int j = 0; j <= 1; j++) {
 			for (int k = 0; k <= 1; k++) {
-				if (i == 0 && j == 0 && k==0)continue;
+				if (i == 0 && j == 0 && k == 0)continue;
 				p[0] = _Vec3{ i + pos.x,j + pos.y,k + pos.z };
 				p[1] = _Vec3{ -i + pos.x,-j + pos.y,-k + pos.z };
 				state = 0;
@@ -387,7 +387,7 @@ bool getCellState(_Vec3 pos, Grid<int> field) {//指定したブロックの値�
 			}
 		}
 	}
-	
+
 	bool res = false;
 	if (field[int(pos.x)][int(pos.y)] >> int(pos.z) & 1) {
 		if (score >= 4 && score <= 6)res = true;
@@ -466,20 +466,20 @@ Array<_Model> coloringModels(Array<_Model> models) {
 	};
 	for (int i = 0; i < models.size(); i++) {
 		double hue = getDistToCore(models[i].zahyo);
-		if(models[i].hp>0)
-		models[i].shape = paintModel(models[i].shape, HSV{ hue * 3,0.6,1.0 });
+		if (models[i].hp > 0)
+			models[i].shape = paintModel(models[i].shape, HSV{ hue * 3,0.6,1.0 });
 	}
 	return models;
 }
-int incrementInRing(int i,int add, int size) {
+int incrementInRing(int i, int add, int size) {
 	return (i + add) % size;
 }
 void drawGraph(Array<int> history, int now) {
 	int i = (now + HISTORY_SIZE - Scene::Width()) % HISTORY_SIZE;
 	int next = i;
 	int count = 0;
-	while (count < Scene::Width()-1) {
-		Line(count,Scene::Height()-history[i]/4,count+1, Scene::Height()-history[next]/4).draw(2);
+	while (count < Scene::Width() - 1) {
+		Line(count, Scene::Height() - history[i] / 4, count + 1, Scene::Height() - history[next] / 4).draw(2);
 		i++;
 		i %= HISTORY_SIZE;
 		next = incrementInRing(i, 1, HISTORY_SIZE);
@@ -544,8 +544,14 @@ void Main()
 	Array<_Model> models_W = toWorld(models);
 	Object camera = { Angle{0,10},_Vec3{0,-100,0} };
 	int time = 0;
-	Array<int> history(HISTORY_SIZE,0);
+	Array<int> history(HISTORY_SIZE, 0);
 	int now = 0;
+	Vec2 center = Scene::Center();
+	Vec2 Button1 = { center.x - 270, center.y + 180 };
+	Vec2 Button2 = { center.x + 270, center.y + 180 };
+	const Circle addButton(Button1, 80);
+	const Circle clearButton(Button2, 80);
+
 	while (System::Update())
 	{
 		const double delta = 200 * Scene::DeltaTime();
@@ -579,12 +585,12 @@ void Main()
 		{
 			models[1].object.pos.y -= delta;
 		}
-		if (SimpleGUI::Button(U"Add", Vec2(600, 300), 200))
+		if (addButton.leftClicked())
 		{
 			fieldState = addField(fieldState);
 			models = fieldToModels(fieldState, models, cubePolygons, core);
 		}
-		if (SimpleGUI::Button(U"Clear", Vec2(600, 400), 200))
+		if (clearButton.leftClicked())
 		{
 			fieldState = getVoidField();
 			models = fieldToModels(fieldState, models, cubePolygons, core);
@@ -627,7 +633,14 @@ void Main()
 			now++;
 			now %= HISTORY_SIZE;
 		}
+		Circle(Button1, 80).draw(Color(242, 10, 32));
+		Circle(Button1, 60).draw(Color(245, 88, 52));
+		addButton.draw(addButton.mouseOver() ? Color(0,0,0,0): Color(0,0,0,40));
+		Circle(Button2, 80).draw(Color(2,210, 22));
+		Circle(Button2, 60).draw(Color(10, 244, 32));
+		clearButton.draw(clearButton.mouseOver() ? Color(0, 0, 0, 0) : Color(0, 0, 0, 40));
 		drawGraph(history, now);
+
 		time++;
 		//デバッグ
 		//Print << Cursor::Pos(); // 現在のマウスカーソル座標を表示
